@@ -37,10 +37,10 @@ class Fuse:
         
         self.net.eval()
 
-    def __call__(self, ir_folder: str, vi_folder: str, dst: str):
+    def __call__(self, i1_folder: str, i2_folder: str, dst: str, fuse_type = None):
         """
-        fuse with ir folder and vi folder and save fusion image into dst
-        :param ir_folder: infrared image folder
+        fuse with i1 folder and vi folder and save fusion image into dst
+        :param i1_folder: infrared image folder
         :param vi_folder: visible image folder
         :param dst: fusion image output folder
         """
@@ -49,36 +49,37 @@ class Fuse:
         print('Model params: {:}'.format(para))
 
         # image list
-        ir_folder = pathlib.Path(ir_folder)
-        vi_folder = pathlib.Path(vi_folder)
-        ir_list = sorted([x for x in sorted(ir_folder.glob('*')) if x.suffix in ['.bmp', '.png', '.jpg']])
-        vi_list = sorted([x for x in sorted(vi_folder.glob('*')) if x.suffix in ['.bmp', '.png', '.jpg']])
+        i1_folder = pathlib.Path(i1_folder)
+        i2_folder = pathlib.Path(i2_folder)
+        i1_list = sorted([x for x in sorted(i1_folder.glob('*')) if x.suffix in ['.bmp', '.png', '.jpg', '.JPG']])
+        i2_list = sorted([x for x in sorted(i2_folder.glob('*')) if x.suffix in ['.bmp', '.png', '.jpg', '.JPG']])
 
         # check image name and fuse
         fuse_time = []
-        rge = tqdm(zip(ir_list, vi_list))
+        rge = tqdm(zip(i1_list, i2_list))
 
-        for ir_path, vi_path in rge:
+        for i1_path, i2_path in rge:
             start = time.time()
 
             # check image name
-            ir_name = ir_path.stem
-            vi_name = vi_path.stem
-            rge.set_description(f'fusing {ir_name}')
-            assert ir_name == vi_name
+            i1_name = i1_path.stem
+            i2_name = i2_path.stem
+            rge.set_description(f'fusing {i1_name}')
+            # assert i1_name == vi_name
 
             # read image
-            ir, vi = [i.unsqueeze(0) for i in self._imread(str(ir_path), str(vi_path))]
-            ir = ir.to(self.device)
-            vi = vi.to(self.device)
+            i1, i2 = self._imread(str(i1_path), str(i2_path), fuse_type = fuse_type)
+            i1 = i1.unsqueeze(0).to(self.device)
+            i2 = i2.unsqueeze(0).to(self.device)
 
             # network forward
             torch.cuda.synchronize() if torch.cuda.is_available() else None
-            fu = self._forward(ir, vi)
+            fu = self._forward(i1, i2)
             torch.cuda.synchronize() if torch.cuda.is_available() else None
 
+
             # save fusion tensor
-            fu_path = pathlib.Path(dst, ir_path.name)
+            fu_path = pathlib.Path(dst, i1_path.name)
             self._imsave(fu_path, fu)
 
             end = time.time()
@@ -94,21 +95,28 @@ class Fuse:
 
 
     @torch.no_grad()
-    def _forward(self, ir: torch.Tensor, vi: torch.Tensor) -> torch.Tensor:
-        fusion = self.net(ir, vi)
+    def _forward(self, i1: torch.Tensor, i2: torch.Tensor) -> torch.Tensor:
+        fusion = self.net(i1, i2)
         return fusion
 
     @staticmethod
-    def _imread(ir_path: str, vi_path: str, flags=cv2.IMREAD_GRAYSCALE) -> torch.Tensor:
-        ir_cv = cv2.imread(ir_path, flags)
+    def _imread(i1_path: str, i2_path: str, flags=cv2.IMREAD_GRAYSCALE, fuse_type = None) -> torch.Tensor:
+        i1_cv = cv2.imread(i1_path, flags).astype('float32')
         
-        vi_cv = cv2.imread(vi_path, flags)
-        height, width = ir_cv.shape[:2]
-        vi_cv = cv2.resize(vi_cv, (width, height))
-
-        ir_ts = kornia.utils.image_to_tensor(ir_cv / 255.0).type(torch.FloatTensor)
-        vi_ts = kornia.utils.image_to_tensor(vi_cv / 255.0).type(torch.FloatTensor)
-        return ir_ts, vi_ts
+        i2_cv = cv2.imread(i2_path, flags).astype('float32')
+        height, width = i1_cv.shape[:2]
+        # if fuse_type == 'black_ir':
+        #     i1_cv[True] = 0
+        # elif fuse_type == 'black_vi':
+        #     i2_cv[True] = 0
+        # if fuse_type == 'white_ir':
+        #     i1_cv[True] = 255
+        # if fuse_type == 'white_vi':
+        #     i2_cv[True] = 255
+            
+        i1_ts = kornia.utils.image_to_tensor(i1_cv / 255.0).type(torch.FloatTensor)
+        i2_ts = kornia.utils.image_to_tensor(i2_cv / 255.0).type(torch.FloatTensor)
+        return i1_ts, i2_ts
 
     @staticmethod
     def _imsave(path: pathlib.Path, image: torch.Tensor):
@@ -124,8 +132,12 @@ if __name__ == '__main__':
     f = Fuse(f"./cache/{model}/best.pth")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ir", default='../datasets/test/ir', help="IR path")
-    parser.add_argument("--vi", default='../datasets/test/vi', help="VI path")
+    parser.add_argument("--i1", default='../datasets/Multi_spectral/infrared/test', help="i1 path")
+    parser.add_argument("--i2", default='../datasets/Multi_spectral/visible/test', help="i2 path")
     args = parser.parse_args()
-
-    f(args.ir, args.vi, f'runs/test/{model}')
+    
+    # f(args.i1, args.i2, f'runs/test/{model}/black_ir', 'black_ir')
+    # f(args.i1, args.i2, f'runs/test/{model}/black_vi', 'black_vi')
+    # f(args.i1, args.i2, f'runs/test/{model}/white_ir', 'white_ir')
+    # f(args.i1, args.i2, f'runs/test/{model}/white_vi', 'white_vi')
+    f(args.i1, args.i2, f'runs/Multi_spectral/{model}/fuse')

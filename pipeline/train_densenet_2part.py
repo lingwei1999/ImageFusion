@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from models.DenseNet_add import DenseNet_half
+from models.DenseNet_add_2part import DenseNet_encoder, DenseNet_decoder
 
 from utils.environment_probe import EnvironmentProbe
 from utils.fusion_data import FusionData
@@ -52,18 +52,21 @@ class Train:
         self.environment_probe = environment_probe
 
         # modules
-        self.net = DenseNet_half()
-        para = sum([np.prod(list(p.size())) for p in self.net.parameters()])
+        self.encoder = DenseNet_encoder()
+        self.decoder = DenseNet_decoder()
+        para = sum([np.prod(list(p.size())) for p in self.encoder.parameters()]) + sum([np.prod(list(p.size())) for p in self.decoder.parameters()])
         logging.info('Model params: {:}'.format(para))
 
         # WGAN adam optim
         logging.info(f'Adam | learning rate: {config.learning_rate}')
-        self.opt_net = Adam(self.net.parameters(), lr=config.learning_rate)
+        self.opt_en = Adam(self.encoder.parameters(), lr=config.learning_rate)
+        self.opt_de = Adam(self.decoder.parameters(), lr=config.learning_rate)
 
         # move to device
         logging.info(f'module device: {environment_probe.device}')
 
-        self.net.to(environment_probe.device)
+        self.encoder.to(environment_probe.device)
+        self.decoder.to(environment_probe.device)
 
         # loss
         
@@ -93,10 +96,13 @@ class Train:
 
         logging.debug('train generator')
         
-        self.net.train()
+        self.encoder.train()
+        self.decoder.train()
 
-
-        fusion = self.net(ir, vi)
+        ir_en = self.encoder(ir)
+        vi_en = self.encoder(vi)
+        f_en = F.softmax(ir_en + vi_en)
+        fusion = self.decoder(f_en)
 
         # calculate loss towards criterion
         l_int = (20*self.L1Loss(fusion, vi) + self.SSIM(fusion, vi))*0.5 + (20*self.L1Loss(fusion, ir) + self.SSIM(fusion, ir))*0.5
@@ -111,9 +117,11 @@ class Train:
         loss = l_int + 20*l_grad
 
         # backwardG
-        self.opt_net.zero_grad()
+        self.opt_en.zero_grad()
+        self.opt_de.zero_grad()
         loss.backward()
-        self.opt_net.step()
+        self.opt_en.step()
+        self.opt_de.step()
 
         state = {
             'g_loss': loss.item(),
@@ -129,9 +137,13 @@ class Train:
 
         logging.debug('eval generator')
         
-        self.net.eval()
+        self.encoder.eval()
+        self.decoder.eval()
 
-        fusion = self.net(ir, vi)
+        ir_en = self.encoder(ir)
+        vi_en = self.encoder(vi)
+        f_en = F.softmax(ir_en + vi_en)
+        fusion = self.decoder(f_en)
 
         l_int = (20*self.L1Loss(fusion, vi) + self.SSIM(fusion, vi))*0.5 + (20*self.L1Loss(fusion, ir) + self.SSIM(fusion, ir))*0.5
 
@@ -207,7 +219,8 @@ class Train:
         logging.info(f'save checkpoint to {str(cache)}')
 
         state = {
-            'net': self.net.state_dict(),
+            'encoder': self.encoder.state_dict(),
+            'decoder': self.decoder.state_dict(),
         }
 
         torch.save(state, cache)
