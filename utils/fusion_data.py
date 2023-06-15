@@ -5,7 +5,7 @@ from pathlib import Path
 from torch import Tensor
 from torch.utils.data import Dataset
 from torchvision import transforms
-
+import os
 
 class FusionData(Dataset):
     """
@@ -16,7 +16,7 @@ class FusionData(Dataset):
         super(FusionData, self).__init__()
 
         assert mode in ['val', 'train'], 'mode should be "val" or "train"'
-        names = (folder / f'{mode}.txt').read_text().splitlines()
+        names = os.listdir(folder/f'visible/{mode}')
         self.samples = [{
             'name': name,
             'ir': folder / f'infrared/{mode}' /f'{name}', ## change file extension here
@@ -36,6 +36,7 @@ class FusionData(Dataset):
 
         ir = self.transforms(ir)
         vi = self.transforms(vi)
+
         sample = {'name': sample['name'], 'ir': ir, 'vi': vi}
 
         return sample
