@@ -82,7 +82,7 @@ class Train:
         train_dataset = FusionData(folder, mode='train', transforms=resize)
         self.train_dataloader = DataLoader(train_dataset, config.batch_size, True, num_workers=config.num_workers, pin_memory=True)
 
-        eval_dataset = FusionData(folder, mode='val', transforms=resize)
+        eval_dataset = FusionData(folder, mode='test', transforms=resize)
         self.eval_dataloader = DataLoader(eval_dataset, config.batch_size, False, num_workers=config.num_workers, pin_memory=True)
 
         logging.info(f'dataset | folder: {str(folder)} | train size: {len(self.train_dataloader) * config.batch_size}')
@@ -154,7 +154,7 @@ class Train:
         fusion_grad=self.sobelconv(fusion)
 
         l_grad = self.L1Loss(fusion_grad, torch.max(ir_grad, vi_grad)).mean()
-        loss = l_int + 20*l_grad
+        loss = l_int + 5*l_grad
 
         return loss.item()
 
