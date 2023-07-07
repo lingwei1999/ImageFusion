@@ -4,7 +4,7 @@
 |:------------:|:-----------------:|:------------:|:----------------:|
 |147985|37129|37265|9417|
 # Train
-    python train.py
+    python train.py --id {Model Name} --folder {Dataset Path}
 # Test
     python fuse.py --ir {IR PATH} --vi {VI PATH}
     python fuse_RGB.py --ir {IR PATH} --vi {VI PATH}
