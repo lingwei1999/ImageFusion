@@ -8,9 +8,8 @@ from argparse import Namespace
 
 # import wandb
 
-# from pipeline.train_Unet import Train
-from pipeline.train_densenet_2part import Train
-# from pipeline.train_Unet import Train
+# from pipeline.train_densenet_2part import Train
+from pipeline.train_densenet import Train
 
 from utils.environment_probe import EnvironmentProbe
 
@@ -20,7 +19,7 @@ def parse_args() -> Namespace:
     parser = argparse.ArgumentParser()
 
     # universal opt
-    parser.add_argument('--id', default='densenet_2part', help='train process identifier')
+    parser.add_argument('--id', default='densenet_add_half', help='train process identifier')
     parser.add_argument('--folder', default='../datasets/LLVIP', help='data root path')
     parser.add_argument('--size', default=256, help='resize image to the specified size')
     parser.add_argument('--cache', default='cache', help='weights cache folder')
